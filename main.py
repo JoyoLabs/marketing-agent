@@ -10,6 +10,7 @@ from rich.console import Console
 from ad_agents.config import AppConfig
 from ad_agents.ideation_agent import IdeationAgent
 from ad_agents.image_agent import ImageGenerationAgent
+from ad_agents.campaign_agent import CampaignAgent
 
 
 app = typer.Typer(help="Creative Agent System")
@@ -39,6 +40,15 @@ def generate_images():
     agent = ImageGenerationAgent(cfg)
     count = agent.run()
     console.print(f"Generated & uploaded {count} images")
+@app.command("create-campaigns")
+def create_campaigns(
+    n: int = typer.Option(1, help="Number of rows to process"),
+    budget_minor: int = typer.Option(300, help="Daily budget in minor units (e.g., 500 = $5)"),
+):
+    cfg = AppConfig.load_from_env()
+    created = CampaignAgent(cfg).run(n=n, budget_minor=budget_minor)
+    console.print(f"Created {created} campaigns")
+
 
 
 @app.command()

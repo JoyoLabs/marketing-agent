@@ -49,14 +49,28 @@ class IdeationAgent:
     @retry(wait=wait_exponential(multiplier=1, min=1, max=20), stop=stop_after_attempt(5))
     def _generate_structured(self, app_desc: str, ios_url: str, android_url: str, n: int, platform: str) -> List[IdeaConcept]:
         system = (
-            "You are an expert direct-response creative strategist. Generate high-performing static ad concepts that target distinct audiences and hooks."
+            "You are a top-performing mobile ads creative strategist."
+            " Generate static image ad concepts that maximize thumb-stop rate and installs."
+            " Focus on variety of audiences and short, strong hooks."
         )
         user = (
-            f"App description: {app_desc}\n"
-            f"iOS URL: {ios_url}\n"
-            f"Android URL: {android_url}\n"
+            f"App description (your only knowledge of the app): {app_desc}\n"
+            f"Store URLs (context only): iOS {ios_url} | Android {android_url}\n"
             f"Target platform: {platform}.\n"
-            f"Generate exactly {n} distinct ideas. Each should focus on a different audience and a different hook (social proof, urgency, benefits, problem/solution, curiosity, contrarian, etc.)."
+            f"Generate exactly {n} distinct ideas. Each must target a different audience and a different hook (e.g., social proof, urgency, benefits, problem/solution, curiosity, novelty, contrarian, FOMO).\n"
+            "Creative rules:\n"
+            "- Assume the viewer does not know the brand; do NOT mention app name unless included in this description.\n"
+            "- Minimize on-image text; if used, keep to a short catchy phrase (<= 4 words).\n"
+            "- Prefer large product UI/visual metaphors over heavy copy.\n"
+            "- Avoid platform UI elements, trademarks, or claims that might violate ad policies.\n"
+            "- Avoid tiny text, paragraphs, or watermarks.\n"
+            "- Design for portrait 1024x1536 (mobile-first).\n"
+            "Output fields:\n"
+            "- target_audience: one sentence defining the audience persona.\n"
+            "- platform: 'Meta'.\n"
+            "- hook: 1-2 words (e.g., 'Curiosity', 'SocialProof').\n"
+            "- idea: 1-2 sentences describing the visual concept and what the image shows.\n"
+            "- image_prompt: an image prompt for gpt-image-1. Do NOT include brand/app names unless provided; describe visuals, composition, colors, style, and minimal overlay text if any."
         )
         console.print("[blue]Generating ad ideas with OpenAI (structured output)...[/blue]")
         # Primary: Structured output via Responses API (enveloped list)

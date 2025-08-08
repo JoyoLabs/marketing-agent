@@ -39,6 +39,10 @@ class SheetsClient:
         sh = self._gc.open_by_key(self._cfg.ideas_sheet_id)
         return sh.sheet1
 
+    def _open_campaign_config_ws(self):
+        sh = self._gc.open_by_key(self._cfg.campaign_config_sheet_id)
+        return sh.sheet1
+
     def get_app_by_name(self, app_name: str) -> Optional[Dict[str, Any]]:
         ws = self._open_app_list_ws()
         rows = ws.get_all_records()
@@ -49,6 +53,14 @@ class SheetsClient:
 
     def list_apps(self) -> List[Dict[str, Any]]:
         return self._open_app_list_ws().get_all_records()
+
+    def get_campaign_config_by_app(self, app_name: str) -> Optional[Dict[str, Any]]:
+        ws = self._open_campaign_config_ws()
+        rows = ws.get_all_records()
+        for row in rows:
+            if str(row.get("AppName", "")).strip().lower() == app_name.strip().lower():
+                return row
+        return None
 
     # Ideas sheet helpers
     def _ideas_headers(self) -> List[str]:
@@ -67,6 +79,12 @@ class SheetsClient:
             "Idea",
             "Image_Prompt",
             "Image_URL",
+            # Campaign fields appended by campaign agent
+            "campaign_id",
+            "adset_id",
+            "creative_id",
+            "ad_id",
+            "image_hash",
         ]
         ws = self._open_ideas_ws()
         headers = ws.row_values(1)
@@ -74,8 +92,13 @@ class SheetsClient:
             if not headers:
                 ws.append_row(expected)
             else:
-                # Overwrite to ensure correct order
-                ws.update("1:1", [expected])
+                # Merge existing headers with expected while keeping order of expected
+                existing = set([h for h in headers if h])
+                merged = []
+                for h in expected:
+                    if h not in merged:
+                        merged.append(h)
+                ws.update("1:1", [merged])
 
     def next_idea_id(self) -> int:
         ws = self._open_ideas_ws()

@@ -5,7 +5,7 @@ from typing import Optional
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 from .config import AppConfig
 
@@ -62,4 +62,24 @@ class DriveClient:
             .execute()
         )
         return file.get("webViewLink") or file.get("webContentLink")
+
+    def download_file_bytes(self, file_id: str) -> bytes:
+        request = self._svc.files().get_media(fileId=file_id, supportsAllDrives=True)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        return fh.getvalue()
+
+    def get_file_name(self, file_id: str) -> Optional[str]:
+        try:
+            meta = (
+                self._svc.files()
+                .get(fileId=file_id, fields="name", supportsAllDrives=True)
+                .execute()
+            )
+            return meta.get("name")
+        except Exception:
+            return None
 

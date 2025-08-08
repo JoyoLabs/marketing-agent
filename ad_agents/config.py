@@ -24,6 +24,7 @@ class AppConfig:
     openai_api_key: str
     app_list_sheet_id: str
     ideas_sheet_id: str
+    campaign_config_sheet_id: str
     drive_folder_id: str
     google_service_account_json_path: Optional[str]
     google_service_account_json: Optional[str]
@@ -39,6 +40,9 @@ class AppConfig:
             ),
             ideas_sheet_id=os.environ.get(
                 "IDEAS_SHEET_ID", "1JaVenG582kvZwaS3noxHGwbGu1-mNtv_mwvaljZUMJo"
+            ),
+            campaign_config_sheet_id=os.environ.get(
+                "CAMPAIGN_CONFIG_SHEET_ID", "1RooxSyfx4Ip47pwIdDErEFbt8lePBixm8KEAruT2H4E"
             ),
             drive_folder_id=os.environ.get(
                 "DRIVE_FOLDER_ID", "1aAKwxkSl3z_tcu_AgXB4WJSAL50BKWML"
