@@ -78,6 +78,7 @@ class CampaignAgent:
         # Campaign naming via config sheet
         app_name = str(row.get("App_Name", "")).strip()
         cfg_row = self._sheets.get_campaign_config_by_app(app_name) or {}
+        cfg_row_index = self._sheets.get_campaign_config_row_index(app_name)
         network = cfg_row.get("Network", "Meta")
         platform = cfg_row.get("Platform", "Android")
         data_source = cfg_row.get("DataSource", "Data")
@@ -87,9 +88,16 @@ class CampaignAgent:
         from datetime import datetime
 
         date_str = datetime.utcnow().strftime("%d%m%y")
-        campaign_name = (
+        base_campaign_name = (
             f"{app_name}_{network}_{platform}_{data_source}_{geo}_{targeting_label}_{campaign_type}_{date_str}"
         ).replace("__", "_")
+        # Prefix with Latest_Campaign_ID from campaign sheet
+        latest_id_val = 1
+        try:
+            latest_id_val = int(str(cfg_row.get("Latest_Campaign_ID", "1")).strip() or "1")
+        except Exception:
+            latest_id_val = 1
+        campaign_name = f"{latest_id_val}_{base_campaign_name}"
 
         # Build Meta config from env + sheet with fallbacks
         fb_app_id = os.environ.get("FB_APP_ID") or os.environ.get("FP_APP_ID")
@@ -139,6 +147,12 @@ class CampaignAgent:
             filename = f"Image_{row.get('App_Name', 'app')}_{hook}.png"
         image_hash = meta.upload_image_from_bytes(image_bytes, filename)
         campaign_id = meta.create_campaign(campaign_name)
+        # Increment Latest_Campaign_ID only after successful campaign creation
+        if cfg_row_index:
+            try:
+                self._sheets.update_campaign_config_row(cfg_row_index, {"Latest_Campaign_ID": latest_id_val + 1})
+            except Exception:
+                pass
 
         # Budget: numbers in sheet represent dollars; convert to minor units
         daily_budget_minor = budget_minor
@@ -177,14 +191,14 @@ class CampaignAgent:
         }
 
     def run(self, n: int = 1, budget_minor: int = 300) -> int:
+        # Row-wise scan to avoid full-sheet GETs
         ws = self._sheets._open_ideas_ws()
-        all_rows = ws.get_all_records()
+        total_rows = self._sheets.ideas_row_count()
         candidates: List[Dict[str, Any]] = []
-        for idx, row in enumerate(all_rows, start=2):
+        for idx in range(2, total_rows + 1):
+            row = self._sheets.read_ideas_row(idx)
             if str(row.get("Status", "")).lower() == "uploaded" and not row.get("campaign_id"):
-                row_copy = dict(row)
-                row_copy["_row_index"] = idx
-                candidates.append(row_copy)
+                candidates.append(row)
 
         if not candidates:
             console.print("[yellow]No uploaded rows without campaigns found[/yellow]")
@@ -211,8 +225,16 @@ class CampaignAgent:
         try:
             row0 = group[0]
             row_index0 = row0["_row_index"]
-            for k in ("campaign_id", "adset_id", "creative_id", "ad_id", "image_hash", "Status"):
-                self._sheets.update_row(row_index0, {k: ids.get(k, "")})
+            self._sheets.batch_update_ideas_rows({
+                row_index0: {
+                    "campaign_id": ids.get("campaign_id", ""),
+                    "adset_id": ids.get("adset_id", ""),
+                    "creative_id": ids.get("creative_id", ""),
+                    "ad_id": ids.get("ad_id", ""),
+                    "image_hash": ids.get("image_hash", ""),
+                    "Status": "CampaignCreated",
+                }
+            })
             created += 1
         except Exception:
             pass
@@ -260,16 +282,16 @@ class CampaignAgent:
                     creative_id=creative_id,
                 )
                 row_index = row["_row_index"]
-                updates = {
-                    "campaign_id": campaign_id,
-                    "adset_id": adset_id,
-                    "creative_id": creative_id,
-                    "ad_id": ad_id,
-                    "image_hash": image_hash,
-                    "Status": "CampaignCreated",
-                }
-                for k, v in updates.items():
-                    self._sheets.update_row(row_index, {k: v})
+                self._sheets.batch_update_ideas_rows({
+                    row_index: {
+                        "campaign_id": campaign_id,
+                        "adset_id": adset_id,
+                        "creative_id": creative_id,
+                        "ad_id": ad_id,
+                        "image_hash": image_hash,
+                        "Status": "CampaignCreated",
+                    }
+                })
                 created += 1
                 console.print(f"[green]Added ad to campaign for row {row_index}[/green]")
             except Exception as e:  # noqa: BLE001
