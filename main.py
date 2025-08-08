@@ -44,10 +44,11 @@ def generate_images():
 def create_campaigns(
     n: int = typer.Option(1, help="Number of rows to process"),
     budget_minor: int = typer.Option(300, help="Daily budget in minor units (e.g., 500 = $5)"),
+    app_name: Optional[str] = typer.Option(None, help="Only process rows for this App_Name"),
 ):
     cfg = AppConfig.load_from_env()
-    created = CampaignAgent(cfg).run(n=n, budget_minor=budget_minor)
-    console.print(f"Created {created} campaigns")
+    created = CampaignAgent(cfg).run(n=n, budget_minor=budget_minor, app_name_filter=app_name)
+    console.print(f"Created {created} ads")
 
 
 
@@ -61,6 +62,22 @@ def run(
     cfg = AppConfig.load_from_env()
     IdeationAgent(cfg).run(app_name=app_name, n=n, platform=platform)
     ImageGenerationAgent(cfg).run()
+
+
+@app.command("full-run")
+def full_run(
+    app_name: str = typer.Option(..., help="App name as in App List sheet (AppName)"),
+    n: int = typer.Option(5, help="Number of ideas/images to create"),
+    budget_minor: int = typer.Option(300, help="Daily budget in minor units (e.g., 500 = $5)"),
+):
+    """Create one campaign with n images for a given app: ideate -> generate-images -> create-campaigns."""
+    cfg = AppConfig.load_from_env()
+    console.print(f"[blue]Ideating {n} ideas for {app_name}...[/blue]")
+    IdeationAgent(cfg).run(app_name=app_name, n=n, platform="Meta")
+    console.print("[blue]Generating images...[/blue]")
+    ImageGenerationAgent(cfg).run()
+    console.print("[blue]Creating campaign...[/blue]")
+    CampaignAgent(cfg).run(n=n, budget_minor=budget_minor, app_name_filter=app_name)
 
 
 if __name__ == "__main__":

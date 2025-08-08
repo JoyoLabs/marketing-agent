@@ -67,6 +67,20 @@ class CampaignAgent:
             raise ValueError(f"Could not extract Drive file id from URL: {drive_url}")
         return self._drive.download_file_bytes(file_id)
 
+    def _find_existing_campaign_for_app(self, app_name: str) -> Optional[tuple[str, str]]:
+        """Return (campaign_id, adset_id) if any existing row for this app has them."""
+        cols = self._sheets.read_ideas_columns(["App_Name", "campaign_id", "adset_id"])
+        app_col = [str(v).strip().lower() for v in cols.get("App_Name", [])]
+        camp_col = cols.get("campaign_id", [])
+        adset_col = cols.get("adset_id", [])
+        target = app_name.strip().lower()
+        for i, name in enumerate(app_col):
+            if name == target and i < len(camp_col) and camp_col[i]:
+                adset = adset_col[i] if i < len(adset_col) else ""
+                if adset:
+                    return (camp_col[i], adset)
+        return None
+
     @retry(wait=wait_exponential(multiplier=1, min=1, max=20), stop=stop_after_attempt(5))
     def _create_one(self, row: Dict[str, Any], budget_minor: int) -> Dict[str, str]:
         idea_id = str(row.get("ID"))
@@ -190,7 +204,7 @@ class CampaignAgent:
             "image_hash": image_hash,
         }
 
-    def run(self, n: int = 1, budget_minor: int = 300) -> int:
+    def run(self, n: int = 1, budget_minor: int = 300, app_name_filter: Optional[str] = None) -> int:
         # Row-wise scan to avoid full-sheet GETs
         ws = self._sheets._open_ideas_ws()
         total_rows = self._sheets.ideas_row_count()
@@ -198,6 +212,8 @@ class CampaignAgent:
         for idx in range(2, total_rows + 1):
             row = self._sheets.read_ideas_row(idx)
             if str(row.get("Status", "")).lower() == "uploaded" and not row.get("campaign_id"):
+                if app_name_filter and str(row.get("App_Name", "")).strip().lower() != app_name_filter.strip().lower():
+                    continue
                 candidates.append(row)
 
         if not candidates:
@@ -211,33 +227,43 @@ class CampaignAgent:
         if not group:
             return 0
 
-        # Use the first row to create the campaign/ad set, then attach all ads under it
-        try:
-            ids = self._create_one(group[0], budget_minor=budget_minor)
-            campaign_id = ids["campaign_id"]
-            adset_id = ids["adset_id"]
-        except Exception as e:  # noqa: BLE001
-            console.print(f"[red]Failed to create base campaign/ad set: {e}[/red]")
-            return 0
+        # Reuse an existing campaign if one already exists for this app
+        reuse = self._find_existing_campaign_for_app(app_name)
+        campaign_id: Optional[str] = None
+        adset_id: Optional[str] = None
+        base_ids: Optional[Dict[str, str]] = None
+        if reuse:
+            campaign_id, adset_id = reuse
+        else:
+            # Use the first row to create the campaign/ad set, then attach all ads under it
+            try:
+                base_ids = self._create_one(group[0], budget_minor=budget_minor)
+                campaign_id = base_ids["campaign_id"]
+                adset_id = base_ids["adset_id"]
+            except Exception as e:  # noqa: BLE001
+                console.print(f"[red]Failed to create base campaign/ad set: {e}[/red]")
+                return 0
 
         created = 0
-        # First row already created; update its sheet row
-        try:
-            row0 = group[0]
-            row_index0 = row0["_row_index"]
-            self._sheets.batch_update_ideas_rows({
-                row_index0: {
-                    "campaign_id": ids.get("campaign_id", ""),
-                    "adset_id": ids.get("adset_id", ""),
-                    "creative_id": ids.get("creative_id", ""),
-                    "ad_id": ids.get("ad_id", ""),
-                    "image_hash": ids.get("image_hash", ""),
-                    "Status": "CampaignCreated",
-                }
-            })
-            created += 1
-        except Exception:
-            pass
+        created = 0
+        # If we created the base on this call, update row0; if reusing, we'll include row0 in the loop below
+        if base_ids is not None:
+            try:
+                row0 = group[0]
+                row_index0 = row0["_row_index"]
+                self._sheets.batch_update_ideas_rows({
+                    row_index0: {
+                        "campaign_id": base_ids.get("campaign_id", ""),
+                        "adset_id": base_ids.get("adset_id", ""),
+                        "creative_id": base_ids.get("creative_id", ""),
+                        "ad_id": base_ids.get("ad_id", ""),
+                        "image_hash": base_ids.get("image_hash", ""),
+                        "Status": "CampaignCreated",
+                    }
+                })
+                created += 1
+            except Exception:
+                pass
 
         # For remaining rows, only create creative + ad under the existing campaign/adset
         meta = None
@@ -259,7 +285,9 @@ class CampaignAgent:
         )
         meta = MetaClient(meta_cfg)
 
-        for row in group[1:]:
+        # If reusing an existing campaign, process all rows in the group; otherwise, skip the first
+        remaining = group if reuse else group[1:]
+        for row in remaining:
             try:
                 drive_url = str(row.get("Image_URL", ""))
                 image_bytes = self._download_image_bytes(drive_url)

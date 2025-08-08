@@ -121,7 +121,14 @@ class SheetsClient:
 
         Returns a dict mapping column name to list of values (starting at row 2).
         """
-        from gspread.utils import col_to_a1
+        def _col_letters(col_idx: int) -> str:
+            # 1-indexed column to A1 letters (1->A, 27->AA)
+            letters = ""
+            n = col_idx
+            while n > 0:
+                n, r = divmod(n - 1, 26)
+                letters = chr(65 + r) + letters
+            return letters
         ws = self._open_ideas_ws()
         headers = self._ideas_headers()
         name_to_index: Dict[str, int] = {h: i + 1 for i, h in enumerate(headers) if h}
@@ -131,7 +138,7 @@ class SheetsClient:
             col_idx = name_to_index.get(name)
             if not col_idx:
                 continue
-            col_letter = col_to_a1(col_idx)
+            col_letter = _col_letters(col_idx)
             ranges.append(f"{col_letter}2:{col_letter}")
             valid_names.append(name)
         if not ranges:
