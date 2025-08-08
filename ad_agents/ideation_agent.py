@@ -21,6 +21,10 @@ class IdeaConcept(BaseModel):
     hook: str = Field(..., description="Short 1-2 word hook describing the unique point of the creative")
     idea: str = Field(..., description="Concise ad concept copy, 1-2 sentences")
     image_prompt: str = Field(..., description="Prompt for gpt-image-1 to create the visual")
+    primary_text: Optional[str] = Field(
+        default=None,
+        description="High-converting short primary text for Meta ad (1 sentence, <= 15 words)",
+    )
 
 
 class IdeasEnvelope(BaseModel):
@@ -77,6 +81,7 @@ class IdeationAgent:
             "- LIGHTING & MOOD: e.g., soft natural daylight, dramatic rim light, cozy warm.\n"
             "- COLOR PALETTE: 2-3 colors with strong contrast; optionally include hex-like descriptors (e.g., deep navy, bright coral).\n"
             "- OPTIONAL OVERLAY TEXT: <= 4 words OR 'none'; include placement (e.g., top-left), size (large), and font vibe (bold modern sans-serif).\n"
+            "- SAFE CROP ZONES: keep important subjects and any overlay text outside top 10% and bottom 10% of the canvas (some placements crop).\n"
             "- NEGATIVE PROMPTS: no logos, no platform UI, no tiny text, no watermarks, no brand or app names, no clutter.\n"
             "- OUTPUT as a coherent single paragraph (no lists), suitable to paste into gpt-image-1.\n"
             "Output fields:\n"
@@ -84,7 +89,8 @@ class IdeationAgent:
             "- platform: 'Meta'.\n"
             "- hook: 1-2 words (e.g., 'Curiosity', 'SocialProof').\n"
             "- idea: 1-2 sentences describing what the image shows and why it works.\n"
-            "- image_prompt: the full production-grade prompt per the spec above."
+            "- image_prompt: the full production-grade prompt per the spec above.\n"
+            "- primary_text: a high-converting primary text to use in the ad (<= 15 words, avoid emojis and hashtags)."
         )
         console.print("[blue]Generating ad ideas with OpenAI (structured output)...[/blue]")
         # Primary: Structured output via Responses API (enveloped list)

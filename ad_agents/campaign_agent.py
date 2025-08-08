@@ -103,15 +103,15 @@ class CampaignAgent:
 
         date_str = datetime.utcnow().strftime("%d%m%y")
         base_campaign_name = (
-            f"{app_name}_{network}_{platform}_{data_source}_{geo}_{targeting_label}_{campaign_type}_{date_str}"
+            f"{app_name}_{network}_{platform}_{data_source}_{geo}_{targeting_label}_{campaign_type}"
         ).replace("__", "_")
-        # Prefix with Latest_Campaign_ID from campaign sheet
+        # Append Latest_Campaign_ID right after CampaignType, before date
         latest_id_val = 1
         try:
             latest_id_val = int(str(cfg_row.get("Latest_Campaign_ID", "1")).strip() or "1")
         except Exception:
             latest_id_val = 1
-        campaign_name = f"{latest_id_val}_{base_campaign_name}"
+        campaign_name = f"{base_campaign_name}_{latest_id_val}_{date_str}"
 
         # Build Meta config from env + sheet with fallbacks
         fb_app_id = os.environ.get("FB_APP_ID") or os.environ.get("FP_APP_ID")
@@ -189,7 +189,7 @@ class CampaignAgent:
         creative_id = meta.create_creative(
             name=ad_asset_name,
             image_hash=image_hash,
-            message="Try it free",
+            message=str(row.get("Primary_Text") or "Try it free"),
         )
         ad_id = meta.create_ad(
             name=ad_asset_name,
@@ -302,7 +302,7 @@ class CampaignAgent:
                 creative_id = meta.create_creative(
                     name=ad_asset_name,
                     image_hash=image_hash,
-                    message="Try it free",
+                    message=str(row.get("Primary_Text") or "Try it free"),
                 )
                 ad_id = meta.create_ad(
                     name=ad_asset_name,

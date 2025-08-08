@@ -196,6 +196,7 @@ class SheetsClient:
             "Hook",
             "Idea",
             "Image_Prompt",
+            "Primary_Text",
             "Image_URL",
             # Campaign fields appended by campaign agent
             "campaign_id",
@@ -259,6 +260,7 @@ class SheetsClient:
                     idea.get("hook", ""),
                     idea.get("idea", ""),
                     idea.get("image_prompt", ""),
+                    idea.get("primary_text", ""),
                     "",
                 ]
             )
