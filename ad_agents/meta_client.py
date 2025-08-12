@@ -87,6 +87,7 @@ class MetaClient:
             AdSet.Field.campaign_id: campaign_id,
             AdSet.Field.daily_budget: daily_budget_minor,
             AdSet.Field.billing_event: AdSet.BillingEvent.impressions,
+            # Default for image flow: optimize installs
             AdSet.Field.optimization_goal: AdSet.OptimizationGoal.app_installs,
             # Remove bid cap by using lowest cost without cap strategy
             AdSet.Field.bid_strategy: "LOWEST_COST_WITHOUT_CAP",

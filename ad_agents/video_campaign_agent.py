@@ -139,12 +139,27 @@ class VideoCampaignAgent:
         campaign_name = self._build_campaign_name(app_name, cfg_row)
         campaign_id = self._meta.create_campaign(campaign_name)
         adset_name = f"{campaign_name}_AS"
+        # Create default ad set (installs), then patch it to optimize for Purchase app event
         adset_id = self._meta.create_adset(
             name=adset_name,
             campaign_id=campaign_id,
             daily_budget_minor=daily_budget_minor,
             targeting_spec=TARGETING_PH_ANDROID,
         )
+        try:
+            from facebook_business.adobjects.adset import AdSet as FBAdSet
+            adset = FBAdSet(adset_id)
+            adset.update({
+                FBAdSet.Field.optimization_goal: FBAdSet.OptimizationGoal.offsite_conversions,
+                FBAdSet.Field.promoted_object: {
+                    "application_id": self._meta._cfg.android_app_id,
+                    "object_store_url": self._meta._cfg.google_play_url,
+                    "custom_event_type": "PURCHASE",
+                },
+            })
+            adset.remote_update()
+        except Exception as e:
+            console.print(f"[yellow]Warning: failed to switch ad set to PURCHASE optimization: {e}[/yellow]")
 
         # Update Latest_Campaign_ID
         cfg_idx = self._sheets.get_campaign_config_row_index_by_app_and_type(app_name, campaign_type)
