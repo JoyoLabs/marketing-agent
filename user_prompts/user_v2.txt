@@ -1,0 +1,4 @@
+App description (your only knowledge of the app): {app_desc}
+Store URLs (context only): iOS {ios_url} | Android {android_url}
+Target platform: {platform}.
+Generate exactly {n} distinct ideas optimized for students and creators. Emphasize novelty and bold visuals.

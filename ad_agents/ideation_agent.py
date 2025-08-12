@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import List, Optional
+import os
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -51,14 +52,27 @@ class IdeationAgent:
         return t.strip()
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=20), stop=stop_after_attempt(5))
-    def _generate_structured(self, app_desc: str, ios_url: str, android_url: str, n: int, platform: str) -> List[IdeaConcept]:
+    def _generate_structured(
+        self,
+        app_desc: str,
+        ios_url: str,
+        android_url: str,
+        n: int,
+        platform: str,
+        system_prompt_override: Optional[str] = None,
+        user_prompt_override: Optional[str] = None,
+    ) -> List[IdeaConcept]:
         system = (
-            "You are a senior mobile performance creative strategist and image prompt engineer."
-            " Your job is to produce testable static ad concepts for utility apps and high-quality prompts for the gpt-image-1 model."
-            " Optimize for scroll-stopping visuals, message clarity, and downstream install rate."
-            " Each concept must be distinct in audience, visual style, palette, and hook so we can A/B test."
+            system_prompt_override
+            if system_prompt_override is not None
+            else (
+                "You are a senior mobile performance creative strategist and image prompt engineer."
+                " Your job is to produce testable static ad concepts for utility apps and high-quality prompts for the gpt-image-1 model."
+                " Optimize for scroll-stopping visuals, message clarity, and downstream install rate."
+                " Each concept must be distinct in audience, visual style, palette, and hook so we can A/B test."
+            )
         )
-        user = (
+        default_user = (
             f"App description (your only knowledge of the app): {app_desc}\n"
             f"Store URLs (context only): iOS {ios_url} | Android {android_url}\n"
             f"Target platform: {platform}.\n"
@@ -74,16 +88,10 @@ class IdeationAgent:
             "- Vary visual style (photoreal lifestyle, bold graphic poster, 3D render, UI-centric mock, conceptual illustration).\n"
             "- Vary palette (dark vs light, warm vs cool), subject (people vs object/UI), and tone (playful vs professional).\n"
             "- Each idea should test a different single insight (e.g., time saved, clarity, reliability, peace-of-mind, FOMO).\n"
-            "image_prompt specification for gpt-image-1 (produce a longer, production-ready prompt):\n"
-            "- SUBJECT & SCENARIO: who/what is shown; 1-2 concrete details.\n"
-            "- COMPOSITION: framing (e.g., close-up hero), rule-of-thirds, negative space for optional short phrase, portrait 1024x1536.\n"
-            "- STYLE: one of [photoreal lifestyle | bold graphic poster | 3D render | minimal flat illustration | UI-centric mock].\n"
-            "- LIGHTING & MOOD: e.g., soft natural daylight, dramatic rim light, cozy warm.\n"
-            "- COLOR PALETTE: 2-3 colors with strong contrast; optionally include hex-like descriptors (e.g., deep navy, bright coral).\n"
-            "- OPTIONAL OVERLAY TEXT: <= 4 words OR 'none'; include placement (e.g., top-left), size (large), and font vibe (bold modern sans-serif).\n"
-            "- SAFE CROP ZONES: keep important subjects and any overlay text outside top 10% and bottom 10% of the canvas (some placements crop).\n"
-            "- NEGATIVE PROMPTS: no logos, no platform UI, no tiny text, no watermarks, no brand or app names, no clutter.\n"
-            "- OUTPUT as a coherent single paragraph (no lists), suitable to paste into gpt-image-1.\n"
+            "image_prompt formatting for gpt-image-1 (produce a longer, production-ready prompt in one paragraph with labeled sections exactly as shown):\n"
+            "Write as a single line with these uppercase labels and a colon after each, separated by a period and a space: \n"
+            "SUBJECT & SCENARIO: <who/what; 1-2 details>. COMPOSITION: <framing, rule-of-thirds, negative space, portrait 1024x1536>. STYLE: <one of [photoreal lifestyle | bold graphic poster | 3D render | minimal flat illustration | UI-centric mock]>. LIGHTING & MOOD: <lighting and atmosphere>. COLOR PALETTE: <2-3 colors with contrast>. OPTIONAL OVERLAY TEXT: <<=4 words with placement, size, font> OR 'none'. SAFE CROP ZONES: <keep important elements away from top/bottom 10%>. NEGATIVE PROMPTS: <no logos, no platform UI, no tiny text, no watermarks, no brand names, no clutter>.\n"
+            "Ensure it reads like: SUBJECT & SCENARIO: ... COMPOSITION: ... STYLE: ... LIGHTING & MOOD: ... COLOR PALETTE: ... OPTIONAL OVERLAY TEXT: ... SAFE CROP ZONES: ... NEGATIVE PROMPTS: ...\n"
             "Output fields:\n"
             "- target_audience: one sentence persona.\n"
             "- platform: 'Meta'.\n"
@@ -92,6 +100,7 @@ class IdeationAgent:
             "- image_prompt: the full production-grade prompt per the spec above.\n"
             "- primary_text: a high-converting primary text to use in the ad (<= 15 words, avoid emojis and hashtags)."
         )
+        user = user_prompt_override if user_prompt_override is not None else default_user
         console.print("[blue]Generating ad ideas with OpenAI (structured output)...[/blue]")
         # Primary: Structured output via Responses API (enveloped list)
         try:
@@ -140,10 +149,30 @@ class IdeationAgent:
                     continue
             return result
 
-    def run(self, app_name: Optional[str], n: Optional[int], platform: Optional[str]) -> int:
+    def run(
+        self,
+        app_name: Optional[str],
+        n: Optional[int],
+        platform: Optional[str],
+        prompt_file: Optional[str] = None,
+        user_prompt_file: Optional[str] = None,
+    ) -> int:
         cfg = self._cfg
         n_out = n or cfg.default_num_ideas
         platform_out = platform or cfg.default_platform
+        system_prompt_override: Optional[str] = None
+        prompt_variant: str = "default"
+        user_prompt_override: Optional[str] = None
+        user_prompt_variant: str = "default"
+        if prompt_file:
+            # Load external system prompt from file
+            if not os.path.isfile(prompt_file):
+                raise RuntimeError(f"Prompt file not found: {prompt_file}")
+            with open(prompt_file, "r", encoding="utf-8") as f:
+                system_prompt_override = f.read()
+            prompt_variant = os.path.splitext(os.path.basename(prompt_file))[0]
+        # Defer reading user prompt until after app metadata is loaded
+        pending_user_prompt_file = user_prompt_file
 
         console.print("[blue]Loading app list from Google Sheets...[/blue]")
         app_row = None
@@ -163,12 +192,30 @@ class IdeationAgent:
         ios_url = app_row.get("iOS_URL", "")
         android_url = app_row.get("Android_URL", "")
 
+        if pending_user_prompt_file:
+            user_prompt_file = pending_user_prompt_file
+            if not os.path.isfile(user_prompt_file):
+                raise RuntimeError(f"User prompt file not found: {user_prompt_file}")
+            with open(user_prompt_file, "r", encoding="utf-8") as f:
+                tpl = f.read()
+            # Allow simple template placeholders in the user prompt
+            user_prompt_override = tpl.format(
+                app_desc=app_desc,
+                ios_url=ios_url,
+                android_url=android_url,
+                platform=platform_out,
+                n=n_out,
+            )
+            user_prompt_variant = os.path.splitext(os.path.basename(user_prompt_file))[0]
+
         ideas = self._generate_structured(
             app_desc=app_desc,
             ios_url=ios_url,
             android_url=android_url,
             n=n_out,
             platform=platform_out,
+            system_prompt_override=system_prompt_override,
+            user_prompt_override=user_prompt_override,
         )
 
         if not ideas:
@@ -176,7 +223,12 @@ class IdeationAgent:
             return 0
 
         # Convert to dicts and append to sheet
-        idea_dicts = [i.model_dump() for i in ideas]
+        idea_dicts = []
+        for i in ideas:
+            data = i.model_dump()
+            data["prompt_variant"] = prompt_variant
+            data["user_prompt_variant"] = user_prompt_variant
+            idea_dicts.append(data)
         _, count = self._sheets.append_ideas(app_name=app_name, ideas=idea_dicts, platform=platform_out)
         console.print(f"[green]Appended {count} ideas for {app_name}[/green]")
         return count
