@@ -32,8 +32,10 @@ class SheetsClient:
         # Caches to minimize repeated reads
         self._ideas_ws_cache = None
         self._campaign_ws_cache = None
+        self._videos_ws_cache = None
         self._ideas_headers_cache: Optional[List[str]] = None
         self._campaign_headers_cache: Optional[List[str]] = None
+        self._videos_headers_cache: Optional[List[str]] = None
 
     # App list sheet helpers
     def _open_app_list_ws(self):
@@ -53,6 +55,22 @@ class SheetsClient:
         sh = self._gc.open_by_key(self._cfg.campaign_config_sheet_id)
         self._campaign_ws_cache = sh.sheet1
         return self._campaign_ws_cache
+
+    def _open_makevideos_ws(self):
+        if not self._cfg.makevideos_sheet_id:
+            raise RuntimeError("MAKEVIDEOS_SHEET_ID is not configured in environment")
+        if self._videos_ws_cache is not None:
+            return self._videos_ws_cache
+        sh = self._gc.open_by_key(self._cfg.makevideos_sheet_id)
+        self._videos_ws_cache = sh.sheet1
+        return self._videos_ws_cache
+
+    def _videos_headers(self) -> List[str]:
+        if self._videos_headers_cache is not None:
+            return self._videos_headers_cache
+        ws = self._open_makevideos_ws()
+        self._videos_headers_cache = ws.row_values(1)
+        return self._videos_headers_cache
 
     def _campaign_headers(self) -> List[str]:
         if self._campaign_headers_cache is not None:
@@ -87,6 +105,36 @@ class SheetsClient:
                         continue
                     row[h] = row_vals[i] if i < len(row_vals) else ""
                 return row
+        return None
+
+    def get_campaign_config_by_app_and_type(self, app_name: str, campaign_type: str) -> Optional[Dict[str, Any]]:
+        ws = self._open_campaign_config_ws()
+        headers = self._campaign_headers()
+        all_rows = ws.get_all_records()
+        for idx, row in enumerate(all_rows, start=2):
+            if (
+                str(row.get("AppName", "")).strip().lower() == app_name.strip().lower()
+                and str(row.get("CampaignType", "")).strip() == campaign_type
+            ):
+                # Reconstruct row with header alignment
+                out: Dict[str, Any] = {}
+                vals = ws.row_values(idx)
+                for i, h in enumerate(headers):
+                    if not h:
+                        continue
+                    out[h] = vals[i] if i < len(vals) else ""
+                return out
+        return None
+
+    def get_campaign_config_row_index_by_app_and_type(self, app_name: str, campaign_type: str) -> Optional[int]:
+        ws = self._open_campaign_config_ws()
+        all_rows = ws.get_all_records()
+        for idx, row in enumerate(all_rows, start=2):
+            if (
+                str(row.get("AppName", "")).strip().lower() == app_name.strip().lower()
+                and str(row.get("CampaignType", "")).strip() == campaign_type
+            ):
+                return idx
         return None
 
     def get_campaign_config_row_index(self, app_name: str) -> Optional[int]:
@@ -312,6 +360,125 @@ class SheetsClient:
             col = headers.index(key) + 1
             a1 = rowcol_to_a1(row_index, col)
             requests.append({"range": a1, "values": [[value]]})
+        if requests:
+            ws.batch_update(requests)
+
+    # Video assets helpers
+    def ensure_videos_headers(self) -> None:
+        expected = [
+            "ID",
+            "Timestamp",
+            "Status",
+            "App_Name",
+            "File_ID",
+            "File_Name",
+            "File_URL",
+            "MimeType",
+            "ModifiedTime",
+            "CampaignType",
+            "campaign_id",
+            "adset_id",
+            "creative_id",
+            "ad_id",
+            "video_id",
+            "notes",
+        ]
+        ws = self._open_makevideos_ws()
+        headers = self._videos_headers()
+        if headers != expected:
+            if not headers:
+                ws.append_row(expected)
+                self._videos_headers_cache = expected
+            else:
+                existing = set([h for h in headers if h])
+                merged = []
+                for h in expected:
+                    if h not in merged:
+                        merged.append(h)
+                ws.update("1:1", [merged])
+                self._videos_headers_cache = merged
+
+    def videos_next_id(self) -> int:
+        ws = self._open_makevideos_ws()
+        ids = ws.col_values(1)[1:]
+        max_id = 0
+        for v in ids:
+            try:
+                max_id = max(max_id, int(v))
+            except Exception:
+                continue
+        return max_id + 1
+
+    def upsert_videos_by_file_id(self, rows_to_insert: List[Dict[str, Any]]) -> int:
+        """Insert rows with new File_IDs only. Returns number of inserted rows."""
+        self.ensure_videos_headers()
+        ws = self._open_makevideos_ws()
+        headers = self._videos_headers()
+        # Build set of existing File_IDs
+        name_to_index = {h: i + 1 for i, h in enumerate(headers) if h}
+        file_id_col = name_to_index.get("File_ID")
+        existing_ids = set()
+        if file_id_col:
+            col_letter = chr(64 + file_id_col)
+            values = ws.get(f"{col_letter}2:{col_letter}")
+            for row in values:
+                if row and row[0]:
+                    existing_ids.add(row[0])
+        now = dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        next_id = self.videos_next_id()
+        appended = []
+        for r in rows_to_insert:
+            fid = str(r.get("File_ID") or "").strip()
+            if not fid or fid in existing_ids:
+                continue
+            appended.append([
+                next_id,
+                now,
+                "New",
+                r.get("App_Name", ""),
+                fid,
+                r.get("File_Name", ""),
+                r.get("File_URL", ""),
+                r.get("MimeType", ""),
+                r.get("ModifiedTime", ""),
+                r.get("CampaignType", ""),
+                "","","","","","",
+            ])
+            next_id += 1
+        if appended:
+            ws.append_rows(appended, value_input_option="RAW")
+        return len(appended)
+
+    def list_new_videos(self, app_name: str, campaign_type: str, limit: int) -> List[Dict[str, Any]]:
+        ws = self._open_makevideos_ws()
+        headers = self._videos_headers()
+        records = ws.get_all_records()
+        out = []
+        for idx, row in enumerate(records, start=2):
+            if (row.get("Status", "").strip().lower() == "new" and
+                str(row.get("App_Name", "")).strip().lower() == app_name.strip().lower() and
+                str(row.get("CampaignType", "")).strip() == campaign_type):
+                row_copy = dict(row)
+                row_copy["_row_index"] = idx
+                out.append(row_copy)
+                if len(out) >= limit:
+                    break
+        return out
+
+    def update_videos_rows(self, updates_by_row_index: Dict[int, Dict[str, Any]]) -> None:
+        from gspread.utils import rowcol_to_a1
+        if not updates_by_row_index:
+            return
+        ws = self._open_makevideos_ws()
+        headers = self._videos_headers()
+        requests: List[Dict[str, Any]] = []
+        for row_index, updates in updates_by_row_index.items():
+            for key, value in updates.items():
+                if key not in headers:
+                    continue
+                col = headers.index(key) + 1
+                a1 = rowcol_to_a1(row_index, col)
+                requests.append({"range": a1, "values": [[value]]})
         if requests:
             ws.batch_update(requests)
 

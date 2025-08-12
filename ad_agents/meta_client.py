@@ -10,6 +10,7 @@ from facebook_business.adobjects.campaign import Campaign
 from facebook_business.adobjects.adset import AdSet
 from facebook_business.adobjects.adimage import AdImage
 from facebook_business.adobjects.adcreative import AdCreative
+from facebook_business.adobjects.advideo import AdVideo
 from facebook_business.adobjects.ad import Ad
 
 
@@ -135,6 +136,68 @@ class MetaClient:
             AdCreative.Field.object_story_spec: object_story_spec,
         }
         # Opt-out of contextual multi-advertiser (if supported)
+        params["contextual_multi_ads"] = {"enroll_status": "OPT_OUT"}
+        creative = self._account.create_ad_creative(params=params)
+        return creative[AdCreative.Field.id]
+
+    def upload_video_from_bytes(self, video_bytes: bytes, filename: str = "video.mp4") -> str:
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+            tmp_file.write(video_bytes)
+            tmp_file_path = tmp_file.name
+        try:
+            video = AdVideo(parent_id=self._cfg.ad_account_id)
+            # The SDK expects a local file path assigned to the filepath field
+            video[AdVideo.Field.filepath] = tmp_file_path
+            video.remote_create()
+            return video[AdVideo.Field.id]
+        finally:
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+
+    def get_video_thumbnail_url(self, video_id: str) -> Optional[str]:
+        try:
+            video = AdVideo(video_id)
+            thumbs = video.get_thumbnails(fields=["uri", "is_preferred"])  # type: ignore[arg-type]
+            preferred = None
+            for t in thumbs:
+                if t.get("is_preferred"):
+                    preferred = t
+                    break
+            target = preferred or (thumbs[0] if thumbs else None)
+            return target.get("uri") if target else None
+        except Exception:
+            return None
+
+    def create_video_creative(self, name: str, video_id: str, message: str, image_url: Optional[str] = None, image_hash: Optional[str] = None) -> str:
+        object_story_spec: Dict[str, Dict] = {
+            "page_id": self._cfg.page_id,
+            "video_data": {
+                "video_id": video_id,
+                "message": message,
+                "call_to_action": {
+                    "type": "INSTALL_MOBILE_APP",
+                    "value": {
+                        "link": self._cfg.google_play_url,
+                        "application": self._cfg.android_app_id,
+                    },
+                },
+            },
+        }
+        # Provide a thumbnail to satisfy API requirements
+        if image_hash:
+            object_story_spec["video_data"]["image_hash"] = image_hash
+        elif image_url:
+            object_story_spec["video_data"]["image_url"] = image_url
+        if self._cfg.instagram_id:
+            object_story_spec["instagram_user_id"] = self._cfg.instagram_id
+
+        params = {
+            AdCreative.Field.name: name,
+            AdCreative.Field.object_story_spec: object_story_spec,
+        }
         params["contextual_multi_ads"] = {"enroll_status": "OPT_OUT"}
         creative = self._account.create_ad_creative(params=params)
         return creative[AdCreative.Field.id]

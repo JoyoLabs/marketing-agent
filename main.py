@@ -11,6 +11,7 @@ from ad_agents.config import AppConfig
 from ad_agents.ideation_agent import IdeationAgent
 from ad_agents.image_agent import ImageGenerationAgent
 from ad_agents.campaign_agent import CampaignAgent
+from ad_agents.video_campaign_agent import VideoCampaignAgent
 import glob
 import os
 
@@ -53,6 +54,30 @@ def create_campaigns(
     cfg = AppConfig.load_from_env()
     created = CampaignAgent(cfg).run(n=n, budget_minor=budget_minor, app_name_filter=app_name)
     console.print(f"Created {created} ads")
+
+
+@app.command("scan-videos")
+def scan_videos(
+    app_name: Optional[str] = typer.Option(None, help="Default App_Name to assign to discovered videos"),
+    campaign_type: Optional[str] = typer.Option(None, help="Default CampaignType to assign to discovered videos"),
+):
+    cfg = AppConfig.load_from_env()
+    inserted = VideoCampaignAgent(cfg).scan_videos(default_app_name=app_name, default_campaign_type=campaign_type)
+    console.print(f"Inserted {inserted} new video rows")
+
+
+@app.command("create-video-campaigns")
+def create_video_campaigns(
+    app_name: str = typer.Option(..., help="App name to process (must match Video Assets rows)"),
+    campaign_type: str = typer.Option(..., help="CampaignType to launch (e.g., AIVideoTesting)"),
+    n: int = typer.Option(3, help="Max number of new videos to attach as ads"),
+    budget_minor: Optional[int] = typer.Option(None, help="Override daily budget in minor units"),
+):
+    cfg = AppConfig.load_from_env()
+    created = VideoCampaignAgent(cfg).create_video_campaigns(
+        app_name=app_name, campaign_type=campaign_type, n=n, budget_minor_override=budget_minor
+    )
+    console.print(f"Created {created} video ads")
 @app.command("prompt-experiment")
 def prompt_experiment(
     app_name: str = typer.Option(..., help="App to ideate for"),
