@@ -158,6 +158,69 @@ class MetaClient:
             if os.path.exists(tmp_file_path):
                 os.unlink(tmp_file_path)
 
+    def extract_first_frame_and_upload(self, video_bytes: bytes) -> Optional[str]:
+        """Extract the first frame of a video and upload as image to get hash.
+
+        Tries ffmpeg pipe-first extraction (via imageio-ffmpeg bundled binary). Falls back to OpenCV if available.
+        Returns image hash or None on failure.
+        """
+        # First attempt: ffmpeg through imageio-ffmpeg
+        try:
+            import tempfile
+            import subprocess
+            import imageio_ffmpeg  # type: ignore
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_v:
+                tmp_v.write(video_bytes)
+                tmp_v_path = tmp_v.name
+            try:
+                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                cmd = [
+                    ffmpeg_exe,
+                    '-y',
+                    '-hide_banner',
+                    '-loglevel', 'error',
+                    '-i', tmp_v_path,
+                    '-frames:v', '1',
+                    '-f', 'image2pipe',
+                    '-vcodec', 'png',
+                    'pipe:1',
+                ]
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                png_bytes = proc.stdout if proc.returncode == 0 and proc.stdout else None
+                if png_bytes:
+                    return self.upload_image_from_bytes(png_bytes, filename="thumb.png")
+            finally:
+                if os.path.exists(tmp_v_path):
+                    os.unlink(tmp_v_path)
+        except Exception:
+            pass
+
+        # Fallback: OpenCV if present
+        try:
+            import tempfile
+            import cv2  # type: ignore
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_v:
+                tmp_v.write(video_bytes)
+                tmp_v_path = tmp_v.name
+            try:
+                cap = cv2.VideoCapture(tmp_v_path)
+                success, frame = cap.read()
+                cap.release()
+                if not success or frame is None:
+                    return None
+                success, buf = cv2.imencode('.png', frame)
+                if not success:
+                    return None
+                png_bytes = buf.tobytes()
+                return self.upload_image_from_bytes(png_bytes, filename="thumb.png")
+            finally:
+                if os.path.exists(tmp_v_path):
+                    os.unlink(tmp_v_path)
+        except Exception:
+            return None
+
     def get_video_thumbnail_url(self, video_id: str) -> Optional[str]:
         try:
             video = AdVideo(video_id)

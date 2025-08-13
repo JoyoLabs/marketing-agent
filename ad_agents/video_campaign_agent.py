@@ -180,9 +180,18 @@ class VideoCampaignAgent:
                 video_bytes = self._drive.download_file_bytes(file_id)
                 video_id = self._meta.upload_video_from_bytes(video_bytes)
 
-                # Provide thumbnail: prefer configured hash, else use video's preferred thumbnail url
-                thumb_hash = os.environ.get("VIDEO_THUMB_IMAGE_HASH")
+                # Generate thumbnail from first frame and upload to Meta to get hash
+                generated_thumb_hash = self._meta.extract_first_frame_and_upload(video_bytes) or ""
+                # Provide thumbnail: prefer generated hash, then configured hash, else use video's preferred thumbnail url
+                env_thumb_hash = os.environ.get("VIDEO_THUMB_IMAGE_HASH")
+                thumb_hash = generated_thumb_hash or env_thumb_hash
+                if generated_thumb_hash:
+                    console.print(f"[cyan]Using generated first-frame thumbnail hash: {generated_thumb_hash}[/cyan]")
+                elif env_thumb_hash:
+                    console.print(f"[yellow]Using fallback .env thumbnail hash: {env_thumb_hash}[/yellow]")
                 thumb_url = None if thumb_hash else self._meta.get_video_thumbnail_url(video_id)
+                if not thumb_hash and thumb_url:
+                    console.print(f"[yellow]Using video's preferred thumbnail URL as fallback[/yellow]")
 
                 # Names
                 drive_name = self._drive.get_file_name(file_id) or "Video_Unknown"
@@ -215,6 +224,9 @@ class VideoCampaignAgent:
                                 message,
                                 image_hash=uploaded_hash,
                             )
+                            if not thumb_hash:
+                                thumb_hash = uploaded_hash
+                                console.print(f"[yellow]Using uploaded logo as thumbnail hash: {uploaded_hash}[/yellow]")
                         except Exception:
                             raise
                     else:
@@ -228,6 +240,7 @@ class VideoCampaignAgent:
                     "creative_id": creative_id,
                     "ad_id": ad_id,
                     "video_id": video_id,
+                    "thumbnail_hash": thumb_hash or "",
                 }
                 created += 1
                 console.print(f"[green]Created video ad for row {row_index}[/green]")

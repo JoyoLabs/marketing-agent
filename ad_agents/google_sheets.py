@@ -382,6 +382,7 @@ class SheetsClient:
             "ad_id",
             "video_id",
             "notes",
+            "thumbnail_hash",
         ]
         ws = self._open_makevideos_ws()
         headers = self._videos_headers()
@@ -443,6 +444,7 @@ class SheetsClient:
                 r.get("ModifiedTime", ""),
                 r.get("CampaignType", ""),
                 "","","","","","",
+                "",
             ])
             next_id += 1
         if appended:
