@@ -74,7 +74,7 @@ class MetaClient:
         params = {
             Campaign.Field.name: name,
             Campaign.Field.objective: "OUTCOME_APP_PROMOTION",
-            Campaign.Field.status: Campaign.Status.paused,
+            Campaign.Field.status: Campaign.Status.active,
             Campaign.Field.special_ad_categories: [],
             Campaign.Field.buying_type: "AUCTION",
         }
@@ -108,7 +108,7 @@ class MetaClient:
             AdSet.Field.optimization_goal: goal,
             # Remove bid cap by using lowest cost without cap strategy
             AdSet.Field.bid_strategy: "LOWEST_COST_WITHOUT_CAP",
-            AdSet.Field.status: AdSet.Status.paused,
+            AdSet.Field.status: AdSet.Status.active,
             AdSet.Field.promoted_object: promoted_object,
             AdSet.Field.targeting: targeting_spec,
         }
@@ -287,7 +287,7 @@ class MetaClient:
             Ad.Field.name: name,
             Ad.Field.adset_id: adset_id,
             Ad.Field.creative: {"creative_id": creative_id},
-            Ad.Field.status: Ad.Status.paused,
+            Ad.Field.status: Ad.Status.active,
         }
         ad = self._account.create_ad(params=params)
         return ad[Ad.Field.id]
