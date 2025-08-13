@@ -81,23 +81,39 @@ class MetaClient:
         camp = self._account.create_campaign(params=params)
         return camp[Campaign.Field.id]
 
-    def create_adset(self, name: str, campaign_id: str, daily_budget_minor: int, targeting_spec: Dict) -> str:
+    def create_adset(
+        self,
+        name: str,
+        campaign_id: str,
+        daily_budget_minor: int,
+        targeting_spec: Dict,
+        optimization_goal: Optional[AdSet.OptimizationGoal] = None,
+        promoted_object_overrides: Optional[Dict] = None,
+        start_time_utc: Optional[str] = None,
+    ) -> str:
+        goal = optimization_goal or AdSet.OptimizationGoal.app_installs
+        promoted_object: Dict[str, str] = {
+            "application_id": self._cfg.android_app_id,
+            "object_store_url": self._cfg.google_play_url,
+        }
+        if promoted_object_overrides:
+            promoted_object.update(promoted_object_overrides)
+
         params = {
             AdSet.Field.name: name,
             AdSet.Field.campaign_id: campaign_id,
             AdSet.Field.daily_budget: daily_budget_minor,
             AdSet.Field.billing_event: AdSet.BillingEvent.impressions,
-            # Default for image flow: optimize installs
-            AdSet.Field.optimization_goal: AdSet.OptimizationGoal.app_installs,
+            # Default for image flow: optimize installs (can be overridden per-call)
+            AdSet.Field.optimization_goal: goal,
             # Remove bid cap by using lowest cost without cap strategy
             AdSet.Field.bid_strategy: "LOWEST_COST_WITHOUT_CAP",
             AdSet.Field.status: AdSet.Status.paused,
-            AdSet.Field.promoted_object: {
-                "application_id": self._cfg.android_app_id,
-                "object_store_url": self._cfg.google_play_url,
-            },
+            AdSet.Field.promoted_object: promoted_object,
             AdSet.Field.targeting: targeting_spec,
         }
+        if start_time_utc:
+            params[AdSet.Field.start_time] = start_time_utc
 
         # Best-effort to disable Multi-Advertiser Ads if the field is supported
         try:

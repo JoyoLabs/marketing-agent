@@ -178,11 +178,28 @@ class CampaignAgent:
         except Exception:
             pass
 
+        # Optional scheduling from config: Schedule_Hour (UTC 0-23). If provided, set ad set start_time to next occurrence.
+        start_time_str: Optional[str] = None
+        try:
+            hour_val = str(cfg_row.get("Schedule_Hour", "")).strip()
+            if hour_val != "":
+                from datetime import datetime, timedelta, timezone
+                hour_int = int(float(hour_val))
+                now = datetime.now(timezone.utc)
+                start_dt = now.replace(minute=0, second=0, microsecond=0, hour=hour_int)
+                if start_dt <= now:
+                    start_dt = start_dt + timedelta(days=1)
+                # Marketing API expects ISO 8601 with timezone offset, e.g., 2025-08-14T00:00:00+0000
+                start_time_str = start_dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
+        except Exception:
+            start_time_str = None
+
         adset_id = meta.create_adset(
             name=f"{campaign_name} | ASet",
             campaign_id=campaign_id,
             daily_budget_minor=daily_budget_minor,
             targeting_spec=TARGETING_PH_ANDROID,
+            start_time_utc=start_time_str,
         )
         # Unified asset name for both creative and ad
         ad_asset_name = _build_ad_asset_name(filename, app_name)

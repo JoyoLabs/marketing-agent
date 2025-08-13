@@ -139,27 +139,55 @@ class VideoCampaignAgent:
         campaign_name = self._build_campaign_name(app_name, cfg_row)
         campaign_id = self._meta.create_campaign(campaign_name)
         adset_name = f"{campaign_name}_AS"
-        # Create default ad set (installs), then patch it to optimize for Purchase app event
+        # Create ad set optimizing for Purchase event (without permanently changing meta client defaults)
+        from facebook_business.adobjects.adset import AdSet as FBAdSet
+        # Optional scheduling: Schedule_Hour in UTC from config
+        start_time_str: Optional[str] = None
+        try:
+            hour_val = str(cfg_row.get("Schedule_Hour", "")).strip()
+            if hour_val != "":
+                from datetime import datetime, timedelta, timezone
+                hour_int = int(float(hour_val))
+                now = datetime.now(timezone.utc)
+                start_dt = now.replace(minute=0, second=0, microsecond=0, hour=hour_int)
+                if start_dt <= now:
+                    start_dt = start_dt + timedelta(days=1)
+                start_time_str = start_dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
+        except Exception:
+            start_time_str = None
+
         adset_id = self._meta.create_adset(
             name=adset_name,
             campaign_id=campaign_id,
             daily_budget_minor=daily_budget_minor,
             targeting_spec=TARGETING_PH_ANDROID,
+            optimization_goal=FBAdSet.OptimizationGoal.offsite_conversions,
+            promoted_object_overrides={"custom_event_type": "PURCHASE"},
+            start_time_utc=start_time_str,
         )
+
+        # Guard: some accounts auto-create a default placeholder ad ("New App Promotion Ad"). Remove it.
         try:
-            from facebook_business.adobjects.adset import AdSet as FBAdSet
-            adset = FBAdSet(adset_id)
-            adset.update({
-                FBAdSet.Field.optimization_goal: FBAdSet.OptimizationGoal.offsite_conversions,
-                FBAdSet.Field.promoted_object: {
-                    "application_id": self._meta._cfg.android_app_id,
-                    "object_store_url": self._meta._cfg.google_play_url,
-                    "custom_event_type": "PURCHASE",
-                },
-            })
-            adset.remote_update()
-        except Exception as e:
-            console.print(f"[yellow]Warning: failed to switch ad set to PURCHASE optimization: {e}[/yellow]")
+            from facebook_business.adobjects.adset import AdSet as FBAdSetObj
+            from facebook_business.adobjects.ad import Ad as FBAd
+            existing_ads = FBAdSetObj(adset_id).get_ads(fields=[FBAd.Field.id, FBAd.Field.name, FBAd.Field.status])
+            for ad_obj in existing_ads:
+                ad_name = str(ad_obj.get(FBAd.Field.name) or "")
+                if ad_name.strip().lower() == "new app promotion ad":
+                    try:
+                        FBAd(ad_obj[FBAd.Field.id]).remote_delete()
+                        console.print("[yellow]Deleted auto-created 'New App Promotion Ad' placeholder[/yellow]")
+                    except Exception:
+                        # If delete not allowed, pause it
+                        try:
+                            ad_api = FBAd(ad_obj[FBAd.Field.id])
+                            ad_api.update({FBAd.Field.status: FBAd.Status.paused})
+                            ad_api.remote_update()
+                            console.print("[yellow]Paused auto-created 'New App Promotion Ad' placeholder[/yellow]")
+                        except Exception:
+                            pass
+        except Exception:
+            pass
 
         # Update Latest_Campaign_ID
         cfg_idx = self._sheets.get_campaign_config_row_index_by_app_and_type(app_name, campaign_type)
