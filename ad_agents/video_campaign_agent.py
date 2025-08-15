@@ -139,8 +139,17 @@ class VideoCampaignAgent:
         campaign_name = self._build_campaign_name(app_name, cfg_row)
         campaign_id = self._meta.create_campaign(campaign_name)
         adset_name = f"{campaign_name}_AS"
-        # Create ad set optimizing for Purchase event (without permanently changing meta client defaults)
         from facebook_business.adobjects.adset import AdSet as FBAdSet
+        # Determine optimization goal from sheet (default PURCHASE)
+        goal_str = str(cfg_row.get("Optimization_Goal", "PURCHASE") or "PURCHASE").strip().upper()
+        optimization_goal = FBAdSet.OptimizationGoal.offsite_conversions
+        promoted_overrides: Optional[Dict[str, str]] = {"custom_event_type": "PURCHASE"}
+        if goal_str in {"APP_INSTALLS", "INSTALLS", "APP_INSTALL"}:
+            optimization_goal = FBAdSet.OptimizationGoal.app_installs
+            promoted_overrides = None
+        elif goal_str in {"OFFSITE_CONVERSIONS"}:
+            optimization_goal = FBAdSet.OptimizationGoal.offsite_conversions
+            promoted_overrides = None
         # Optional scheduling: Schedule_Hour in UTC from config
         start_time_str: Optional[str] = None
         try:
@@ -161,8 +170,8 @@ class VideoCampaignAgent:
             campaign_id=campaign_id,
             daily_budget_minor=daily_budget_minor,
             targeting_spec=TARGETING_PH_ANDROID,
-            optimization_goal=FBAdSet.OptimizationGoal.offsite_conversions,
-            promoted_object_overrides={"custom_event_type": "PURCHASE"},
+            optimization_goal=optimization_goal,
+            promoted_object_overrides=promoted_overrides,
             start_time_utc=start_time_str,
         )
 

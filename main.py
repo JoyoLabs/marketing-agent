@@ -136,6 +136,41 @@ def user_prompt_experiment(
         ImageGenerationAgent(cfg).run()
 
 
+@app.command("dual-prompt-experiment")
+def dual_prompt_experiment(
+    app_name: str = typer.Option(..., help="App to ideate for"),
+    prompts_dir: str = typer.Option(..., help="Directory containing system prompt *.txt files"),
+    user_prompts_dir: str = typer.Option(..., help="Directory containing user prompt *.txt templates"),
+    n_per_combo: int = typer.Option(2, help="Ideas to generate per (system,user) prompt combination"),
+    generate_images: bool = typer.Option(
+        True,
+        "--generate-images/--no-generate-images",
+        help="Whether to immediately generate images for new ideas",
+        show_default=True,
+    ),
+):
+    """Run ideation across the Cartesian product of system and user prompt files; tags rows with Prompt_Variant and User_Prompt_Variant, optionally generate images."""
+    cfg = AppConfig.load_from_env()
+    agent = IdeationAgent(cfg)
+    sys_files = sorted(glob.glob(os.path.join(prompts_dir, "*.txt")))
+    user_files = sorted(glob.glob(os.path.join(user_prompts_dir, "*.txt")))
+    if not sys_files:
+        console.print("[red]No system prompt files found[/red]")
+        raise typer.Exit(code=1)
+    if not user_files:
+        console.print("[red]No user prompt files found[/red]")
+        raise typer.Exit(code=1)
+    total = 0
+    for sf in sys_files:
+        for uf in user_files:
+            console.print(f"[blue]Ideating {n_per_combo} with system: {os.path.basename(sf)} + user: {os.path.basename(uf)}[/blue]")
+            total += agent.run(app_name=app_name, n=n_per_combo, platform="Meta", prompt_file=sf, user_prompt_file=uf)
+    console.print(f"[green]Total ideas appended: {total}[/green]")
+    console.print("If you enabled image generation, images will be created next.")
+    if generate_images:
+        ImageGenerationAgent(cfg).run()
+
+
 
 @app.command()
 def run(

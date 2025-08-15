@@ -1,0 +1,29 @@
+App description (your only knowledge of the app): {app_desc}
+Store URLs (context only): iOS {ios_url} | Android {android_url}
+Target platform: {platform}.
+Generate exactly {n} distinct ideas. Each must target a different audience persona and hook.
+
+Creative policy & quality rules:
+- Smartphone visuals only. Show an in-hand phone or a large phone-screen close-up as the primary subject.
+- Do NOT show laptops, desktops, monitors, keyboards, mice, or tablets.
+- Use minimal on-image text; allowed only if <= 4 words, large and highly legible.
+- Favor a single, large focal subject, clean background, and high contrast.
+- Avoid platform UI elements, device logos, competitor branding, private data, or policy-sensitive content.
+- Portrait orientation 1024x1536. Keep safe margins around any text.
+
+Variation requirements across ideas:
+- Vary visual style (photoreal lifestyle, bold graphic poster, 3D render, minimal flat illustration, UI-centric mock).
+- Vary palette (dark vs light, warm vs cool), subject (people vs object/UI), and tone (playful vs professional).
+- Each idea should test a different single insight (time saved, accuracy, relief, clarity, FOMO, novelty, social proof, urgency).
+
+image_prompt formatting for gpt-image-1 (single paragraph, uppercase labels, exactly this order):
+SUBJECT & SCENARIO: <who/what; include phone in-hand or phone screen close-up>. COMPOSITION: <framing, rule-of-thirds, negative space, portrait 1024x1536>. STYLE: <one of [photoreal lifestyle | bold graphic poster | 3D render | minimal flat illustration | UI-centric mock]>. LIGHTING & MOOD: <lighting and atmosphere>. COLOR PALETTE: <2-3 contrasting colors>. OPTIONAL OVERLAY TEXT: <<=4 words with placement, size, font> OR 'none'. SAFE CROP ZONES: <keep important elements away from top/bottom 10%>. NEGATIVE PROMPTS: <no laptop, no desktop, no monitor, no computer, no keyboard, no mouse, no TV, no logos, no platform UI, no tiny text, no watermarks, no brand names, no clutter>.
+
+Output fields:
+- target_audience: one sentence persona.
+- platform: 'Meta'.
+- hook: 1-2 words (e.g., 'Curiosity', 'SocialProof').
+- idea: 1-2 sentences describing what the image shows and why it works.
+- image_prompt: the full production-grade prompt per the spec above.
+- primary_text: a high-converting primary text for the ad (<= 15 words, avoid emojis and hashtags).
+

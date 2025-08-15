@@ -1,0 +1,27 @@
+App description (your only knowledge of the app): {app_desc}
+Store URLs (context only): iOS {ios_url} | Android {android_url}
+Target platform: {platform}.
+Generate exactly {n} distinct ideas.
+
+Creative policy & quality rules:
+- Each idea must spotlight one clear pain point and one specific feature/benefit that solves it.
+- Visual must communicate function at a glance (UI close-ups, clear before/after, or simple metaphors).
+- Minimal on-image text (<= 4 words), large, legible, and brandless.
+- Avoid platform UI elements, logos, competitor branding, private data, or policy-sensitive content.
+- Portrait 1024x1536; strong focal subject and clean background with high contrast.
+
+Variation requirements across ideas:
+- Vary the pain point (confusion, wasted time, missed deadlines, errors, stress) and the corresponding feature (automation, templates, AI assist, tracking, insights, sharing).
+- Vary style, palette, and tone across ideas to enable robust A/B tests.
+
+image_prompt formatting for gpt-image-1 (single paragraph, uppercase labels, exactly this order):
+SUBJECT & SCENARIO: <who/what; show the problem context or feature in action>. COMPOSITION: <framing, rule-of-thirds, negative space, portrait 1024x1536>. STYLE: <photoreal lifestyle | bold graphic poster | 3D render | minimal flat illustration | UI-centric mock>. LIGHTING & MOOD: <lighting and atmosphere>. COLOR PALETTE: <2-3 contrasting colors>. OPTIONAL OVERLAY TEXT: <<=4 words with placement, size, font> OR 'none'. SAFE CROP ZONES: <keep important elements away from top/bottom 10%>. NEGATIVE PROMPTS: <no platform UI, no logos, no tiny text, no watermarks, no brand names, no clutter>.
+
+Output fields:
+- target_audience: one sentence persona.
+- platform: 'Meta'.
+- hook: 1-2 words (e.g., 'PainPoint', 'Benefit').
+- idea: 1-2 sentences describing what the image shows and why it works.
+- image_prompt: the full production-grade prompt per the spec above.
+- primary_text: a high-converting primary text for the ad (<= 15 words, avoid emojis and hashtags).
+

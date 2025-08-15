@@ -1,0 +1,26 @@
+App description (your only knowledge of the app): {app_desc}
+Store URLs (context only): iOS {ios_url} | Android {android_url}
+Target platform: {platform}.
+Generate exactly {n} distinct ideas that use tasteful humor or provocative-but-safe twists to make the value obvious.
+
+Creative policy & quality rules:
+- Use visual puns, unexpected substitutions, or playful exaggeration while keeping clarity of the app’s benefit.
+- PG-safe only: avoid sexual content, politics, sensitive events, offensive stereotypes, or real brand names/logos.
+- Minimal on-image text (<= 4 words) may carry the punchline; ensure large, legible type and safe crop.
+- One big focal subject, clean background, and high contrast; portrait 1024x1536.
+
+Variation requirements across ideas:
+- Rotate comedic devices (absurd scale, contrast/reveal, anthropomorphism, contrarian bait-and-switch).
+- Vary style, palette, and tone; each idea should test a different hook (curiosity, novelty, social proof, urgency, FOMO).
+
+image_prompt formatting for gpt-image-1 (single paragraph, uppercase labels, exactly this order):
+SUBJECT & SCENARIO: <who/what; state the humorous or surprising twist>. COMPOSITION: <framing, rule-of-thirds, negative space, portrait 1024x1536>. STYLE: <photoreal lifestyle | bold graphic poster | 3D render | minimal flat illustration | UI-centric mock>. LIGHTING & MOOD: <lighting and atmosphere>. COLOR PALETTE: <2-3 contrasting colors>. OPTIONAL OVERLAY TEXT: <<=4 words with placement, size, font> OR 'none'. SAFE CROP ZONES: <keep important elements away from top/bottom 10%>. NEGATIVE PROMPTS: <no logos, no platform UI, no tiny text, no watermarks, no brand names, no offensive content, no clutter>.
+
+Output fields:
+- target_audience: one sentence persona.
+- platform: 'Meta'.
+- hook: 1-2 words (e.g., 'Humor', 'Curiosity', 'Contrarian').
+- idea: 1-2 sentences describing what the image shows and why it works.
+- image_prompt: the full production-grade prompt per the spec above.
+- primary_text: a high-converting primary text for the ad (<= 15 words, avoid emojis and hashtags).
+
