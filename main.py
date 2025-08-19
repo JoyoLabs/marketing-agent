@@ -12,6 +12,7 @@ from ad_agents.ideation_agent import IdeationAgent
 from ad_agents.image_agent import ImageGenerationAgent
 from ad_agents.campaign_agent import CampaignAgent
 from ad_agents.video_campaign_agent import VideoCampaignAgent
+from ad_agents.creative_analysis_agent import CreativeAnalysisAgent
 import glob
 import os
 
@@ -78,6 +79,18 @@ def create_video_campaigns(
         app_name=app_name, campaign_type=campaign_type, n=n, budget_minor_override=budget_minor
     )
     console.print(f"Created {created} video ads")
+
+
+@app.command("analyze-competitor-creatives")
+def analyze_competitor_creatives(
+    app_name: Optional[str] = typer.Option(None, help="App name to associate with new rows (optional)"),
+    limit: Optional[int] = typer.Option(None, help="Max number of items to analyze in this run"),
+):
+    """Analyze competitor creatives from the configured Drive folder."""
+    cfg = AppConfig.load_from_env()
+    agent = CreativeAnalysisAgent(cfg)
+    count = agent.run(app_name=app_name, limit=limit)
+    console.print(f"Analyzed {count} competitor creatives")
 @app.command("prompt-experiment")
 def prompt_experiment(
     app_name: str = typer.Option(..., help="App to ideate for"),

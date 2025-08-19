@@ -33,9 +33,11 @@ class SheetsClient:
         self._ideas_ws_cache = None
         self._campaign_ws_cache = None
         self._videos_ws_cache = None
+        self._analysis_ws_cache = None
         self._ideas_headers_cache: Optional[List[str]] = None
         self._campaign_headers_cache: Optional[List[str]] = None
         self._videos_headers_cache: Optional[List[str]] = None
+        self._analysis_headers_cache: Optional[List[str]] = None
 
     # App list sheet helpers
     def _open_app_list_ws(self):
@@ -65,12 +67,28 @@ class SheetsClient:
         self._videos_ws_cache = sh.sheet1
         return self._videos_ws_cache
 
+    def _open_analysis_ws(self):
+        if not self._cfg.creative_analysis_sheet_id:
+            raise RuntimeError("CREATIVE_ANALYSIS_SHEET_ID is not configured in environment")
+        if self._analysis_ws_cache is not None:
+            return self._analysis_ws_cache
+        sh = self._gc.open_by_key(self._cfg.creative_analysis_sheet_id)
+        self._analysis_ws_cache = sh.sheet1
+        return self._analysis_ws_cache
+
     def _videos_headers(self) -> List[str]:
         if self._videos_headers_cache is not None:
             return self._videos_headers_cache
         ws = self._open_makevideos_ws()
         self._videos_headers_cache = ws.row_values(1)
         return self._videos_headers_cache
+
+    def _analysis_headers(self) -> List[str]:
+        if self._analysis_headers_cache is not None:
+            return self._analysis_headers_cache
+        ws = self._open_analysis_ws()
+        self._analysis_headers_cache = ws.row_values(1)
+        return self._analysis_headers_cache
 
     def _campaign_headers(self) -> List[str]:
         if self._campaign_headers_cache is not None:
@@ -398,6 +416,153 @@ class SheetsClient:
                         merged.append(h)
                 ws.update("1:1", [merged])
                 self._videos_headers_cache = merged
+
+    # Creative analysis helpers
+    def ensure_analysis_headers(self) -> None:
+        expected = [
+            "ID",
+            "Timestamp",
+            "Status",
+            "App_Name",
+            "File_ID",
+            "File_Name",
+            "File_URL",
+            "MimeType",
+            "ModifiedTime",
+            "IsVideo",
+            "Target Audience",
+            "Hook first 3-4 seconds",
+            "App Showcase",
+            "Product Feature / Benefits Outlined",
+            "Video storyline",
+            "Video / Static",
+            "UGC AI / UGC Real",
+            "CTA",
+            "Transcript",
+            "Model",
+            "Analyst_Notes",
+            "length",
+        ]
+        ws = self._open_analysis_ws()
+        headers = self._analysis_headers()
+        if headers != expected:
+            if not headers:
+                ws.append_row(expected)
+                self._analysis_headers_cache = expected
+            else:
+                existing = set([h for h in headers if h])
+                merged = []
+                for h in expected:
+                    if h not in merged:
+                        merged.append(h)
+                ws.update("1:1", [merged])
+                self._analysis_headers_cache = merged
+
+    def analysis_next_id(self) -> int:
+        ws = self._open_analysis_ws()
+        ids = ws.col_values(1)[1:]
+        max_id = 0
+        for v in ids:
+            try:
+                max_id = max(max_id, int(v))
+            except Exception:
+                continue
+        return max_id + 1
+
+    def list_unanalyzed_files(self) -> List[Dict[str, Any]]:
+        """Return all rows whose Status is not 'Analyzed' (or empty) for reprocessing decisions.
+
+        If the sheet is empty, returns [].
+        """
+        try:
+            ws = self._open_analysis_ws()
+            records = ws.get_all_records()
+        except Exception:
+            return []
+        out: List[Dict[str, Any]] = []
+        for idx, row in enumerate(records, start=2):
+            status = str(row.get("Status", "")).strip().lower()
+            if status != "analyzed":
+                rc = dict(row)
+                rc["_row_index"] = idx
+                out.append(rc)
+        return out
+
+    def find_analysis_by_file_id(self, file_id: str) -> Optional[Dict[str, Any]]:
+        ws = self._open_analysis_ws()
+        headers = self._analysis_headers()
+        name_to_index: Dict[str, int] = {h: i + 1 for i, h in enumerate(headers) if h}
+        fid_col = name_to_index.get("File_ID")
+        if not fid_col:
+            return None
+        col_letter = chr(64 + fid_col)
+        values = ws.get(f"{col_letter}2:{col_letter}")
+        for idx, row in enumerate(values, start=2):
+            if row and row[0] == file_id:
+                # reconstruct
+                row_vals = ws.row_values(idx)
+                data: Dict[str, Any] = {}
+                for i, h in enumerate(headers):
+                    if not h:
+                        continue
+                    data[h] = row_vals[i] if i < len(row_vals) else ""
+                data["_row_index"] = idx
+                return data
+        return None
+
+    def append_analysis_rows(self, rows: List[Dict[str, Any]]) -> int:
+        self.ensure_analysis_headers()
+        ws = self._open_analysis_ws()
+        next_id = self.analysis_next_id()
+        from datetime import datetime as _dt
+        now = _dt.utcnow().isoformat(timespec="seconds") + "Z"
+        appended = []
+        for r in rows:
+            appended.append([
+                next_id,
+                now,
+                r.get("Status", "New"),
+                r.get("App_Name", ""),
+                r.get("File_ID", ""),
+                r.get("File_Name", ""),
+                r.get("File_URL", ""),
+                r.get("MimeType", ""),
+                r.get("ModifiedTime", ""),
+                r.get("IsVideo", ""),
+                r.get("Target Audience", ""),
+                r.get("Hook first 3-4 seconds", ""),
+                r.get("App Showcase", ""),
+                r.get("Product Feature / Benefits Outlined", ""),
+                r.get("Video storyline", ""),
+                r.get("Video / Static", ""),
+                r.get("UGC AI / UGC Real", ""),
+                r.get("CTA", ""),
+                r.get("Transcript", ""),
+                r.get("Model", ""),
+                r.get("Analyst_Notes", ""),
+                r.get("length", ""),
+            ])
+            next_id += 1
+        if appended:
+            ws.append_rows(appended, value_input_option="RAW")
+        return len(appended)
+
+    def update_analysis_rows(self, updates_by_row_index: Dict[int, Dict[str, Any]]) -> None:
+        from gspread.utils import rowcol_to_a1
+        if not updates_by_row_index:
+            return
+        ws = self._open_analysis_ws()
+        headers = self._analysis_headers()
+        requests: List[Dict[str, Any]] = []
+        for row_index, updates in updates_by_row_index.items():
+            for key, value in updates.items():
+                if key not in headers:
+                    continue
+                col = headers.index(key) + 1
+                a1 = rowcol_to_a1(row_index, col)
+                requests.append({"range": a1, "values": [[value]]})
+        if requests:
+            ws.batch_update(requests)
 
     def videos_next_id(self) -> int:
         ws = self._open_makevideos_ws()

@@ -107,3 +107,27 @@ class DriveClient:
                 break
         return files
 
+    def list_images_in_folder(self, folder_id: str):
+        query = f"'{folder_id}' in parents and mimeType contains 'image/' and trashed=false"
+        fields = "nextPageToken, files(id,name,mimeType,modifiedTime,webViewLink)"
+        page_token = None
+        files = []
+        while True:
+            resp = (
+                self._svc.files()
+                .list(
+                    q=query,
+                    spaces="drive",
+                    fields=fields,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            files.extend(resp.get("files", []))
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+        return files
+

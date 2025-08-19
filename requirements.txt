@@ -10,4 +10,6 @@ pydantic>=2.7.0
 opencv-python-headless>=4.10.0.84
 numpy>=1.26.4
 imageio-ffmpeg>=0.4.9
+soundfile>=0.12.1
+facebook-business>=20.0.0
 

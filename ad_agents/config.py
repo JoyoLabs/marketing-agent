@@ -27,7 +27,9 @@ class AppConfig:
     campaign_config_sheet_id: str
     drive_folder_id: str
     drive_video_folder_id: str
+    competitor_creatives_folder_id: str
     makevideos_sheet_id: str
+    creative_analysis_sheet_id: Optional[str]
     google_service_account_json_path: Optional[str]
     google_service_account_json: Optional[str]
     default_platform: str = "Meta"
@@ -52,8 +54,14 @@ class AppConfig:
             drive_video_folder_id=os.environ.get(
                 "DRIVE_VIDEO_FOLDER_ID", ""
             ),
+            competitor_creatives_folder_id=os.environ.get(
+                "COMPETITOR_CREATIVES_FOLDER_ID", ""
+            ),
             makevideos_sheet_id=os.environ.get(
                 "MAKEVIDEOS_SHEET_ID", ""
+            ),
+            creative_analysis_sheet_id=os.environ.get(
+                "CREATIVE_ANALYSIS_SHEET_ID"
             ),
             google_service_account_json_path=os.environ.get(
                 "GOOGLE_SERVICE_ACCOUNT_JSON_PATH"
